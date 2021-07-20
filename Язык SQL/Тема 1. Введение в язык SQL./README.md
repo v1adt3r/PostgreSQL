@@ -69,6 +69,8 @@ CREATE TABLE aircrafts
 aircraft_code | character(3) | NOT NULL |
 model | text | NOT NLL
 range | integer | NOT NULL |
+
+
 Индексы:\
 `"aircrafts_pkey" PRIMARY KEY, btree (aircraft_code)` \
 Ограничения-проверки\
