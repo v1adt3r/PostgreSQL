@@ -178,8 +178,7 @@ ANALYZE: она соберет статистику, необходимую оп
 *** 
 
 ### Формат directory
-<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/5.jpeg?raw=true">
-
+<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/5.jpeg?raw=true" \>
 >Каталог с оглавлением и отдельными файлами на каждый объект базы
 отдельные объекты базы данных можно выбрать на этапе восстановления
 и выгрузка, и загрузка возможны в несколько параллельных потоков
@@ -270,3 +269,5 @@ ANALYZE: она соберет статистику, необходимую оп
 *** 
 
 ### Копия кластера БД
+
+<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/6.jpeg?raw=true"></img>
