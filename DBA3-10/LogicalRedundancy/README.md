@@ -39,7 +39,7 @@
 *** 
 
 ### SQL-команда `COPY`
-<img style="height:140px" src="https://i.ibb.co/k31HYQt/Logical-Redundany.jpg"></img>
+<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/1.jpeg?raw=true"></img>
 
 - Файл в ФС сервера и доступен владельцу экземпляра PostgreSQL, можно ограничить столбцы (или использовать произвольный запрос)
 при восстановлении строки добавляются к имеющимся в таблице
@@ -67,7 +67,7 @@
 
 ### Команда psql `\copy`
 
-<img src="https://i.ibb.co/SVS5NLS/1.jpg"></img>
+<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/2.jpeg?raw=true"></img>
 
 - Файл в ФС клиента и доступен пользователю ОС, запустившему psql
   происходит пересылка данных между клиентом и сервером
@@ -92,7 +92,7 @@
 ***
 
 ### Копия базы данных
-<img src="https://i.ibb.co/ZcKYmhf/2.jpg"></img>
+<img src="https://github.com/v1adt3r/SQL/blob/main/DBA3-10/LogicalRedundancy/3.jpeg?raw=true"></img>
 
 - Формат: команды SQL
   при выгрузке можно выбрать отдельные объекты базы данных
