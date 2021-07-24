@@ -40,7 +40,7 @@
 
 ### SQL-команда `COPY`
 <div style="display: flex; flex-direction:column; align-items: center">
-<div><img style="height:140px" src="/home/v1adt3r/Изображения/LogicalRedundany.png"></img></div>
+<div><img style="height:140px" src="https://i.ibb.co/k31HYQt/Logical-Redundany.jpg"></img></div>
 <div style="text-align: center">файл в ФС сервера и доступен владельцу экземпляра PostgreSQL
 можно ограничить столбцы (или использовать произвольный запрос)
 при восстановлении строки добавляются к имеющимся в таблице</div>
