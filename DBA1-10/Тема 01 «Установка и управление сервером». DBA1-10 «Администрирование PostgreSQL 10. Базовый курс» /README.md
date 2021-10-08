@@ -253,5 +253,26 @@ make -C catalog distprep generated-header-symlinks
 # Список доступных расширений можно посмотреть запросом:
 
 postgres$ psql -c 'SELECT name, comment FROM pg_available_extensions ORDER BY name;'
+   name   |           comment            
+----------+------------------------------
+ pgcrypto | cryptographic functions
+ plpgsql  | PL/pgSQL procedural language
+(2 rows)
 ```
 
+### Остановка сервера
+```shell
+# Для остановки используется команда pg_ctl stop -m fast|smart|immediate
+# В ключе -m можно указать один из трех режимов останова:
+# fast - принудительно завершает сеансы и записывает на диск изменения из оперативной
+# памяти.
+# smart - ожидает завершения всех сеансов и записывает на диск изменения из оперативной
+# памяти.
+# immediate - принудительно завершает сеансы, при запуске потребуется восстановление.
+
+# По умолчанию используется fast.
+
+postgres$ pg_ctl -w -l postgres/logfile -D /usr/local/pgsql/data stop
+waiting for server to shut down.... done
+server stopped
+```
