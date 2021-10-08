@@ -113,7 +113,7 @@ config.status: linking src/backend/port/sysv_shmem.c to src/backend/port/pg_shme
 config.status: linking src/include/port/linux.h to src/include/pg_config_os.h
 config.status: linking src/makefiles/Makefile.linux to src/Makefile.port
 ```
-### Сборка POSTGRESQL
+### Сборка PostgreSQL
 ```shell
 # Возможножные варианты
 # make - сборка только сервера.
@@ -121,4 +121,137 @@ config.status: linking src/makefiles/Makefile.linux to src/Makefile.port
 # Выбираем сборку только сервера. Установка расширений посмотрим дальше.
 
 user$ make
+make -C ./src/backend generated-headers
+make[1]: Entering directory '/home/user/postgresql-14.0/src/backend'
+make -C catalog distprep generated-header-symlinks
+...
+make[1]: Entering directory '/home/user/postgresql-14.0/config'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/home/user/postgresql-14.0/config'
 ```
+### Установка
+```shell
+# Теперь выполняем устаноку. Для этого потребуются права суперпользователя.
+# команда make устанавлиает в тот пакет который указан в --prefix
+
+user$ sudo make install
+make -C ./src/backend generated-headers
+make[1]: Entering directory '/home/user/postgresql-14.0/src/backend'
+make -C catalog distprep generated-header-symlinks
+...
+/usr/bin/install -c -m 755 ./install-sh '/usr/local/pgsql/lib/pgxs/config/install-sh'
+/usr/bin/install -c -m 755 ./missing '/usr/local/pgsql/lib/pgxs/config/missing'
+make[1]: Leaving directory '/home/user/postgresql-14.0/config'
+
+# Если бы на прошлом шаге делали make world, т.е собрали бы сервер с расширениями и документацией
+# то на этом пришлось бы делать не sudo make install а sudo make install-world
+```
+
+### Пользователь postgres и каталог PGDATA
+
+```shell
+# Пользователь postgres, под которым будет работать СУБД, уже создан заранее. Нужно создать каталог 
+# для данных и сделать postgres его владельцем.
+
+user$ sudo mkdir /usr/local/pgsql/data
+user$ sudo chown postgres /usr/local/pgsql/data
+
+# /usr/local/pgsql/data часто называют PGDATA, по имени переменной окружения, которую
+# удобно использовать при работе с утилитами сервера. 
+```
+
+### Окружение пользователя
+
+```shell
+# В окружениии пользователя postgres учтено, куда устанавливается СУБД, и где находится каталог
+# с данными.
+
+postgres$ echo $PGDATA
+empty
+
+postgres$ export PGDATA=/usr/local/pgsql/data
+postgres$ export PATH=/usr/local/pgsql/bin:$PATH
+
+postgres$ echo $PGDATA; echo $PATH
+/usr/local/pgsql/data
+/usr/local/pgsql/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin
+
+# Команда для переключения на пользователя postgres: sudo su - postgres
+```
+
+### Инициализация и запуск кластера
+```shell
+# Для инициализации кластера баз данных используется утилита initdb.
+# Ключ -k включает подсчет контрольной суммы страниц, что позволяет своевременно обноруживать
+# повреждение данных. В остальном используем настройки по умолчанию:
+
+postgres$ initdb -k
+The files belonging to this database system will be owned by user "postgres".
+This user must also own the server process.
+...
+Success. You can now start the database server using:
+pg_ctl -D /usr/local/pgsql/data -l logfile start
+```
+
+### Запуск сервера
+```shell
+# Теперь все готово к запуску сервера:
+
+postgres$ ls 
+12  dbal_log  postgres
+
+postgres$ pg_ctl -w -l postgres/logfile -D /usr/local/pgsql/data start
+waiting for server to start.... done
+server started
+
+postgres$ cat postgres/logfile
+2021-10-08 05:07:48.948 MSK [75163] LOG:  starting PostgreSQL 14.0 on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 9.3.0-17ubuntu1~20.04) 9.3.0, 64-bit
+2021-10-08 05:07:48.948 MSK [75163] LOG:  listening on IPv4 address "127.0.0.1", port 5432
+2021-10-08 05:07:48.953 MSK [75163] LOG:  listening on Unix socket "/tmp/.s.PGSQL.5432"
+2021-10-08 05:07:48.958 MSK [75166] LOG:  database system was shut down at 2021-10-08 05:00:54 MSK
+2021-10-08 05:07:48.961 MSK [75163] LOG:  database system is ready to accept connections
+```
+
+### Проверяем работу
+```shell
+postgres$ psql -c 'select now();'
+              now              
+-------------------------------
+ 2021-10-08 05:11:16.175839+03
+(1 row)
+
+# Все успешно подключилось и выполнилась функция возвращающая текущее время
+```
+
+### Установка расширений
+```shell
+# Собираем и устанавливаем расширение pgcrypto. Для сборки отдельного расширения,
+# нужно перейти в его каталог и выполнить команду make.
+
+postgres$ su - user
+
+user$ cd ~/postgresql-14.0/contrib/pgcrypto/
+user$ make
+make -C ../../src/backend generated-headers
+make[1]: Entering directory '/home/v1adt3r/postgresql-14.0/src/backend'
+make -C catalog distprep generated-header-symlinks
+...
+
+user$ sudo make install
+make -C ../../src/backend generated-headers
+make[1]: Entering directory '/home/v1adt3r/postgresql-14.0/src/backend'
+make -C catalog distprep generated-header-symlinks
+...
+```
+
+### Проверка расширений
+```shell
+# Большинство установленных расширений создают новые объекты SQL 
+# (функция, представления, таблицы). Перед использованием таких расширений 
+# требуется выполнить SQL-команду CREATE EXTENSION
+
+# Список доступных расширений можно посмотреть запросом:
+
+postgres$ psql -c 'SELECT name, comment FROM pg_available_extensions ORDER BY name;'
+```
+
