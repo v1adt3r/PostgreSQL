@@ -207,5 +207,17 @@ User
 ```shell
 # Можно записать вывод команды в файл с помощью `\o[ut];`
 
-=> \o log_file
+=> \o dbal_log
+
+=> SELECT schemaname, tablename, tableowner, FROM pg_tables LIMIT 5;
+
+=> \! cat dbal_log
+ schemaname |       tablename       | tableowner 
+------------+-----------------------+------------
+ pg_catalog | pg_statistic          | postgres
+ pg_catalog | pg_type               | postgres
+ pg_catalog | pg_foreign_table      | postgres
+ pg_catalog | pg_authid             | postgres
+ pg_catalog | pg_statistic_ext_data | postgres
+(5 rows)
 ```
