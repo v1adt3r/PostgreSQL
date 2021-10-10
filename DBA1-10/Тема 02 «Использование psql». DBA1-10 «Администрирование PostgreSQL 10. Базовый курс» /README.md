@@ -221,3 +221,137 @@ User
  pg_catalog | pg_statistic_ext_data | postgres
 (5 rows)
 ```
+
+### Выполнение скрипта
+```shell
+=> \o dbal_log
+
+=> \a \t
+
+=> \! cat dbal_log 
+SELECT 'pg_statistic: '|| count(*) FROM pg_statistic;
+SELECT 'pg_type: '|| count(*) FROM pg_type;
+SELECT 'pg_foreign_table: '|| count(*) FROM pg_foreign_table;
+
+=> \o
+
+\i dbal_log
+pg_statistic: 406
+pg_type: 601
+pg_foreign_table: 0
+
+# Другие способы выполнить команды из файла:
+# psql < filename
+# psql -f filename
+
+# Если требовалось обойтись без создания файла, можно было бы завершить запрос \gexec.  
+=> SELECT 'SELECT '''|| tablename||': ''|| count(*) FROM '||tablename||';' FROM pg_tables LIMIT 3 \gexec
+pg_statistic: 406
+pg_type: 601
+pg_foreign_table: 0
+
+# Значение каждого столбца каждой строки выполняется отдельной командой SQL.
+```
+
+### Переменные psql
+```shell
+# По аналогии с shell, psql имеет собственные переменные, среди которых есть ряд встроенных
+# (имеющих определенный смысл для psql)
+
+# Установим переменную
+=> \set NAME User
+
+=> \echo :NAME
+User
+
+# Сброс значения переменной
+=> \unset NAME
+=> \echo :NAME
+:NAME
+```
+
+### Запись запроса в переменную
+```shell
+=> SELECT now() AS curr_time \gset
+
+=> \echo :curr_time
+2021-10-08 15:53:15.437934+03
+```
+
+### Переменные
+```shell
+=> \set
+AUTOCOMMIT = 'on'
+COMP_KEYWORD_CASE = 'preserve-upper'
+DBNAME = 'postgres'
+...
+VERSION_NAME = '14.0'
+VERSION_NUM = '140000'
+curr_time = '2021-10-08 15:53:15.437934+03'
+```
+
+### Условный оператор в psql
+```shell
+# В командных файлах можно использовать условные операторы.
+# Например, требуется найти размер каталога с WAL-сегментами. 
+
+=> SELECT :SERVER_VERSION_NUM
+140000
+
+=> SELECT :SERVER_VERSION_NUM >= 10000 AS ispgsql10\gset
+=> \echo :ispgsql10
+t
+```
+
+### Конмады для работы с системными каталогами
+```shell
+# С помощью серии команд, в основном начинающихся с \d, можно смотреть информацию об объектах БД.
+
+=> \d pg_tables
+              View "pg_catalog.pg_tables"
+   Column    |  Type   | Collation | Nullable | Default 
+-------------+---------+-----------+----------+---------
+ schemaname  | name    |           |          | 
+ tablename   | name    |           |          | 
+ tableowner  | name    |           |          | 
+ tablespace  | name    |           |          | 
+ hasindexes  | boolean |           |          | 
+ hasrules    | boolean |           |          | 
+ hastriggers | boolean |           |          | 
+ rowsecurity | boolean |           |  
+```
+
+### Настройка psql
+```shell
+# Файл .psqlrc из домашнего каталога пользователя выполняется при запуске psql. В него можно поместить
+# команды для настройки сеанса работы. Среди них:
+# 
+# - Приглашение для ввода команд
+# - Программу постраничного просмотра результатов запросов:
+# - Переменные для хранения текста часто используемых команд.
+
+=> \set top5 'SELECT tablename, pg_total_relation_size(schemaname||''.''||tablename) AS bytes FROM pg_tables ORDER BY bytes DESC LIMIT 5;'
+
+=> \echo :top5
+SELECT tablename, pg_total_relation_size(schemaname||'.'tablename) AS bytes FROM pg_tables ORDER BY bytes DESC LIMIT 5;
+
+=> :top5
+   tablename    |  bytes  
+----------------+---------
+ pg_depend      | 1400832
+ pg_proc        | 1212416
+ pg_rewrite     |  737280
+ pg_attribute   |  688128
+ pg_description |  548864
+(5 rows)
+
+# Если записать эту команду \set в .psqlrc, то переменная top5 будет всегда доступна.
+```
+
+###
+```shell
+```
+
+###
+```shell
+```
