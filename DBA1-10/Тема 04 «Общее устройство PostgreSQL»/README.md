@@ -26,7 +26,6 @@
 особенность — поддержка согласованной работы транзакций.
 
 ![Общее устройство PostgreSQL](img/01.png "Общее устройство PostgreSQL")
-<img src="https://github.com/v1adt3r/PostgreSQL/blob/main/DBA1-10/%D0%A2%D0%B5%D0%BC%D0%B0%2004%20%C2%AB%D0%9E%D0%B1%D1%89%D0%B5%D0%B5%20%D1%83%D1%81%D1%82%D1%80%D0%BE%D0%B9%D1%81%D1%82%D0%B2%D0%BE%20PostgreSQL%C2%BB/img/01.png?raw=true"/>
 
 ## Транзакции
 
