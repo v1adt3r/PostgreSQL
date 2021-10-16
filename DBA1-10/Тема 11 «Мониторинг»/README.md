@@ -55,7 +55,6 @@ https://postgrespro.ru/docs/postgresql/10/diskusage
 | Статистика  | Параметр |
 | ------------- | ------------- |
 | текущая активность и ожидания обслуживающих и фоновых процессов | `track_activities` включен по умолчанию  |
-|  
 
 Текущая активность всех обслуживающих процессов и (начиная
 с версии 10) фоновых процессов отображается в представлении
@@ -507,39 +506,185 @@ stats_reset           | 2021-10-16 13:14:58.795657+03
 # buffers_backend    - кол-во страниц, записанных серверными процессами.
 ```
 
-### TITLE
+### Текущие активности
 ```shell
+# Воспроизведем сценарий, в котором один процесс блокирует выполнение другого,
+# и попробуем разобраться в ситуации с помощью системных представлений.
 
+# Создадим таблицу с одной строкой:
+
+=> CREATE TABLE t(n integer);
+CREATE TABLE
+
+=> INSERT INTO t VALUES(42);
+INSERT 0 1
+
+# Запустим два сеанса, один из которых изменяет таблицу и ничего не делает:
+
+user$ psql -d admin_monitoring
+
+| => BEGIN;
+| BEGIN
+
+| => UPDATE t SET n = n + 1;
+| UPDATE 1
+
+# А второй пытается изменить ту же строку и блокируется:
+
+|| => UPDATE t SET n = n + 2;
+
+# Посмотрим информацию об обслуживающих процессах:
+
+admin$ psql -d admin_monitoring
+
+=> SELECT pid, query, state, wait_event, wait_event_type, pg_blocking_pids(pid)
+   FROM pg_stat_activity
+   WHERE backend_type = 'client backend'\gx
+   
+-[ RECORD 1 ]----+-----------------------------------------------------------------------------
+pid              | 70991
+query            | UPDATE t SET n = n + 1;
+state            | idle in transaction
+wait_event       | ClientRead
+wait_event_type  | Client
+pg_blocking_pids | {}
+-[ RECORD 2 ]----+-----------------------------------------------------------------------------
+pid              | 70998
+query            | UPDATE t SET n = n + 2;
+state            | active
+wait_event       | transactionid
+wait_event_type  | Lock
+pg_blocking_pids | {70991}
+-[ RECORD 3 ]----+-----------------------------------------------------------------------------
+pid              | 71006
+query            | SELECT pid, query, state, wait_event, wait_event_type, pg_blocking_pids(pid)+
+                 |    FROM pg_stat_activity                                                    +
+                 |    WHERE backend_type = 'client backend'
+state            | active
+wait_event       | 
+wait_event_type  | 
+pg_blocking_pids | {}
+
+# Состояние idle in transaction означает, что сеанс начал транзакцию, но в 
+# настоящее время ничего не делает, а транзакция осталась незавершенной. Это 
+# может стать проблемой, если ситуация возникает систематически, например,
+# из-за некорректной реализации приложения или из-за ошибок в драйвере -
+# поскольку открытый сеанс расходует оперативную память.
+
+# Начиная с версии 9.6 в арсенале администратора пояился параметр:
+
+# idle_in_transaction_session_timeout - принудительно завершает сеансы, 
+# в которых транзакция простаивает больше указанного времени.
+
+# А мы покажем, как завершить блокирующий сеанс вручную. Сначала запомним
+# номер заблокированного процесса:
+
+=> SELECT pid as blocked_pid
+   FROM pg_stat_activity
+   WHERE backend_type = 'client backend'
+   AND cardinality(pg_blocking_pids(pid)) > 0 \gset
+
+# Выполнения запроса можно прервать функцией pg_cancel_backend. В нашем 
+# случае транзакция простаивает, так что просто прерываем сеанс, вызывая
+# pg_terminated_backend: 
+
+=> SELECT pg_terminate_backend(b.pid)
+   FROM unnest(pg_blocking_pids(:blocked_pid)) AS b(pid);  
+ pg_terminate_backend 
+----------------------
+ t
+(1 row)
+
+# Функция unnest нужна, поскольку pg_blocking_pids возвращает массив
+# идентификаторов процессов, блокирующих искомый серверный процесс. В нашем
+# примере блокирующий процесс один, но в общем случае их может быть несколько.
+
+# Проверим состояние серверных процессов:
+
+=> SELECT pid, query, state, wait_event, wait_event_type, pg_blocking_pids(pid)
+   FROM pg_stat_activity
+   WHERE backend_type = 'client backend'\gx
+   
+# Осталось только два, причем заблокированный успешно завершил транзакцию.
+
+# Начиная с версии 10 представлени pg_stat_activity показывает информацию 
+# не только про обслуживающие процессы, но и про слжебные фоновые процессы
+# экземляра:
+
+=> SELECT pid, backend_type, backend_start, state
+   FROM pg_stat_activity;   
+     pid  |         backend_type         |         backend_start         | state  
+-------+------------------------------+-------------------------------+--------
+ 70972 | autovacuum launcher          | 2021-10-16 14:37:44.595333+03 | 
+ 70974 | logical replication launcher | 2021-10-16 14:37:44.595707+03 | 
+ 70998 | client backend               | 2021-10-16 14:37:53.822408+03 | idle
+ 71006 | client backend               | 2021-10-16 14:37:56.792233+03 | active
+ 70970 | background writer            | 2021-10-16 14:37:44.595593+03 | 
+ 70969 | checkpointer                 | 2021-10-16 14:37:44.594178+03 | 
+ 70971 | walwriter                    | 2021-10-16 14:37:44.594798+03 | 
+(7 rows)
+
+# Сравним с тем что показывает ОС:
+
+=> \! ps -o pid,command --ppid `head -n 1 $PGDATA/postmaster.pid`
+    PID COMMAND
+  70969 postgres: checkpointer 
+  70970 postgres: background writer 
+  70971 postgres: walwriter 
+  70972 postgres: autovacuum launcher 
+  70973 postgres: stats collector 
+  70974 postgres: logical replication launcher 
+  70998 postgres: postgres admin_monitoring [local] idle
+  71006 postgres: postgres admin_monitoring [local] idle
+
+# Можно заметить что в pg_stat_activity не попадает процесс stats collector.
 ```
 
-### TITLE
+### Анализ журнала
 ```shell
+# Посмотрим самый простой случай. Например, нас интересует сообщения FATAL:
 
-```
+=> \! grep FATAL postgres/logfile | tail -n 10
+2021-10-16 14:25:16.833 MSK [70115] FATAL:  lock file "postmaster.pid" already exists
+2021-10-16 14:37:17.395 MSK [70122] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.395 MSK [70901] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.395 MSK [68948] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.397 MSK [63665] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.397 MSK [47606] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.398 MSK [69410] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.398 MSK [70886] FATAL:  terminating connection due to administrator command
+2021-10-16 14:37:17.399 MSK [70894] FATAL:  terminating connection due to administrator command
+2021-10-16 15:36:51.100 MSK [70991] FATAL:  terminating connection due to administrator command
 
-### TITLE
-```shell
+# Сообщение 'terminating connection' вызвано тем, что мы завершили блокирующий процесс.
 
-```
+# Обычное применение журнала - анализ наиболее продолжительных запросов. Добавим 
+# к строкам журнала номер процесса и включим выввод команд и времени их выполнения:
 
-### TITLE
-```shell
+=> ALTER SYSTEM SET log_min_duration_statement=0;
+ALTER SYSTEM
 
-```
+=> ALTER SYSTEM SET log_line_prefix='(pid=%p) ';
+ALTER SYSTEM
 
-### TITLE
-```shell
+=> SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
 
-```
+# Теперь выполним какую-нибудь команду:
 
-### TITLE
-```shell
+=> SELECT sum(random()) FROM generate_series(1,10000);
+        sum        
+-------------------
+ 4982.977402438159
+(1 row)
 
-```
+# И посмотрим журнал:
 
-### TITLE
-```shell
-
+=> \! tail -n 1 postgres/logfile
+(pid=71006) LOG:  duration: 7.559 ms  statement: SELECT sum(random()) FROM generate_series(1,10000);
 ```
 
 ## Итоги
