@@ -330,31 +330,6 @@ REASSIGN OWNED
 DROP ROLE
 ```
 
-### TITLE
-```shell
-
-```
-
-### TITLE
-```shell
-
-```
-
-### TITLE
-```shell
-
-```
-
-### TITLE
-```shell
-
-```
-
-### TITLE
-```shell
-
-```
-
 ## Итоги
 
 - Роли объединяют концепции пользователей и групп
