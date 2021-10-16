@@ -290,29 +290,114 @@ https://postgrespro.ru/docs/postgresql/10/sql-altertable
 
 ## Практика
 
-### TITTLE
+### Оценка разрастания таблиц и индексов
 ```shell
+# Оценить степень разрастания объектов, чтобы принять решение о полной очистке,
+# можно разными способами:
 
-```
+# запросами к системному каталогу;
+# используя расширение pgstattuple.
 
-### TITTLE
-```shell
+=> CREATE EXTENSION pgstattuple;
+CREATE EXTENSION
 
-```
+# Создадим таблицу и заполним её данными:
 
-### TITTLE
-```shell
+=> CREATE TABLE bloat(id serial, s text);
+CREATE TABLE;
 
-```
+=> INSERT INTO bloat(s)
+   SELECT g.id::text FROM generate_series(1,100000) AS g(id);
+INSERT 0 100000
 
-### TITTLE
-```shell
+=> CREATE INDEX ON bloat(s);
+CREATE INDEX
 
-```
+# С помощью расширения можно проверить состояние таблицы:
 
-### TITTLE
-```shell
+=> SELECT * FROM pgstattuple('bloat')\gx
+-[ RECORD 1 ]------+--------
+table_len          | 4423680
+tuple_count        | 100000
+tuple_len          | 3388895
+tuple_percent      | 76.61
+dead_tuple_count   | 0
+dead_tuple_len     | 0
+dead_tuple_percent | 0
+free_space         | 16552
+free_percent       | 0.37
 
+# tuple_percent - доля полезной информации (не 100% из-за накладных расходов).
+
+# И индекса:
+
+=> SELECT * FROM pgstatindex('bloat_s_idx')\gx
+-[ RECORD 1 ]------+--------
+version            | 4
+tree_level         | 1
+index_size         | 2260992
+root_block_no      | 3
+internal_pages     | 1
+leaf_pages         | 274
+empty_pages        | 0
+deleted_pages      | 0
+avg_leaf_density   | 89.83
+leaf_fragmentation | 0
+
+# avg_leaf_density   - заполненость листовых страниц инлекса;
+# leaf_fragmentation - характеристика физической упорядоченности страниц.
+
+# Теперь обновим половину строк:
+
+=> UPDATE bloat SET s = s || '!' WHERE id % 2 = 0;
+UPDATE 50000
+
+# Посмотрим на таблицу снова:
+
+=> SELECT * FROM pgstattuple('bloat')\gx
+-[ RECORD 1 ]------+--------
+table_len          | 6635520
+tuple_count        | 100000
+tuple_len          | 3438895
+tuple_percent      | 51.83
+dead_tuple_count   | 0
+dead_tuple_len     | 0
+dead_tuple_percent | 0
+free_space         | 2018316
+free_percent       | 30.42
+
+# Плотность уменьшилась.
+
+# Чтобы не читать всю таблицу целиком, можно попросить pgstattuple показать
+# приблизительную информацию:
+
+=> SELECT * FROM pgstattuple_approx('bloat')\gx
+-[ RECORD 1 ]--------+-------------------
+table_len            | 6635520
+scanned_percent      | 0
+approx_tuple_count   | 100000
+approx_tuple_len     | 4631168
+approx_tuple_percent | 69.79359567901234
+dead_tuple_count     | 0
+dead_tuple_len       | 0
+dead_tuple_percent   | 0
+approx_free_space    | 2004352
+approx_free_percent  | 30.206404320987655
+
+# И посмотрим на индекс:
+
+=> SELECT * FROM pgstatindex('bloat_s_idx')\gx
+-[ RECORD 1 ]------+--------
+version            | 4
+tree_level         | 2
+index_size         | 4513792
+root_block_no      | 412
+internal_pages     | 3
+leaf_pages         | 547
+empty_pages        | 0
+deleted_pages      | 0
+avg_leaf_density   | 45.15
+leaf_fragmentation | 49.91
 ```
 
 ### TITTLE
